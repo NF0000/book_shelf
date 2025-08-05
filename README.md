@@ -1,95 +1,128 @@
-# 📚 PDF Bookshelf & Reader
+# 📚 PDF本棚 & リーダー
 
-A comprehensive PDF management and reading application with book-like viewing experience and bookmark functionality.
+包括的なPDF管理・読書アプリケーション。本物の本のような見開きビューとブックマーク機能を提供します。
 
-## ✨ Features
+## ✨ 主要機能
 
-### 📖 PDF Bookshelf
-- **Library Management**: Organize PDFs in a visual bookshelf interface
-- **Category System**: Create custom categories (料理, 勉強, ハワイ, etc.)
-- **Drag & Drop Reordering**: Custom book arrangement in "Custom (Drag & Drop)" sort mode
-- **Search Functionality**: Find books by title, filename, or category
-- **Bookmark System**: Visual bookmark indicators with page numbers
-- **Thumbnail Previews**: Auto-generated book covers
-- **Book Settings**: Customize title, reading direction, thumbnail page, and categories
+### 📖 PDF本棚
+- **ライブラリ管理**: 視覚的な本棚インターフェースでPDFを整理
+- **カテゴリシステム**: カスタムカテゴリ作成（料理、勉強、ハワイなど）
+- **ドラッグ&ドロップ並び替え**: 「カスタム（ドラッグ&ドロップ）」ソートモードで自由な配置
+- **検索機能**: タイトル、ファイル名、カテゴリで書籍を検索
+- **ブックマークシステム**: ページ番号付きの視覚的ブックマーク表示
+- **お気に入りページ**: 重要なページをお気に入りに登録（⭐表示）
+- **サムネイルプレビュー**: 自動生成される書籍カバー
+- **書籍設定**: タイトル、読書方向、サムネイルページ、カテゴリをカスタマイズ
+- **プロファイル管理**: データのエクスポート/インポートでアップデート時のデータ保護
 
-### 📖 PDF Reader
-- **Book-like Experience**: Double-page spread view like a real book
-- **Flexible Reading**: Supports both left-to-right and right-to-left reading directions
-- **Smart Navigation**: Arrow keys, space bar, page up/down, or click navigation
-- **Automatic Bookmarks**: Saves reading position automatically
-- **Zoom Controls**: Zoom in/out or fit to window
-- **Fullscreen Mode**: Distraction-free reading experience
-- **Manual Bookmark Save**: Press 'B' to save bookmark manually
+### 📖 PDFリーダー
+- **本物の本体験**: 実際の本のような見開きページビュー
+- **柔軟な読書**: 左から右、右から左の両方の読書方向に対応
+- **スマートナビゲーション**: 矢印キー、スペースバー、Page Up/Down、クリックナビゲーション
+- **自動ブックマーク**: 読書位置を自動保存（2秒間隔）
+- **お気に入りページ**: Fキーで現在のページをお気に入りに追加、Gキーでメニュー表示
+- **ズーム機能**: 拡大/縮小、ウィンドウサイズに合わせる
+- **フルスクリーンモード**: 集中できる読書環境
+- **手動ブックマーク**: Bキーで手動ブックマーク保存
 
-## 🚀 Quick Start
+## 🚀 クイックスタート
 
-1. **Launch the Application**: Run `PDF_Bookshelf.exe`
-2. **Add PDFs**: Click "+ Add PDF" to import your PDF files
-3. **Organize**: Set categories and customize book settings (right-click → Settings)
-4. **Read**: Double-click any book to start reading from your last position
-5. **Arrange**: Switch to "Custom (Drag & Drop)" sort mode to reorder books
+1. **アプリケーション起動**: `PDF_Bookshelf.exe`を実行
+2. **PDF追加**: 「+ PDF追加」をクリックしてPDFファイルをインポート
+3. **整理**: カテゴリを設定し、書籍設定をカスタマイズ（右クリック → 設定）
+4. **読書**: 書籍をダブルクリックして最後の位置から読書開始
+5. **配置**: 「カスタム（ドラッグ&ドロップ）」ソートモードで書籍を並び替え
 
-## ⌨️ Keyboard Shortcuts
+## ⌨️ キーボードショートカット
 
-### PDF Reader
-- **Navigation**: ←/→, ↑/↓, Space, Backspace, Page Up/Down
-- **Zoom**: +/= (zoom in), - (zoom out), 0 (fit to window)
-- **File**: O (open PDF)
-- **View**: F/F11/Esc (fullscreen toggle), H/? (help)
-- **Bookmark**: B (manual save)
-- **Quit**: Q
+### PDFリーダー
+- **ナビゲーション**: ←/→, ↑/↓, Space, Backspace, Page Up/Down
+- **ズーム**: +/= (拡大), - (縮小), 0 (ウィンドウに合わせる)
+- **お気に入り**: F (現在のページをお気に入りに追加), G (お気に入りメニュー表示)
+- **ファイル**: O (PDF開く)
+- **表示**: F/F11/Esc (フルスクリーン切替), H/? (ヘルプ)
+- **ブックマーク**: B (手動保存)
+- **終了**: Q
 
-### PDF Bookshelf
-- **File**: Ctrl+O (add PDF)
-- **Search**: Ctrl+F (focus search)
-- **Refresh**: F5
+### PDF本棚
+- **ファイル**: Ctrl+O (PDF追加)
+- **検索**: Ctrl+F (検索フォーカス)
+- **更新**: F5
 
-## 📂 Data Storage
+## 📂 データ保存
 
-- **Bookshelf Data**: `data/bookshelf.json`
-- **Thumbnails**: `data/thumbnails/`
-- All data is stored locally and portable
+- **本棚データ**: `data/bookshelf.json`
+- **サムネイル**: `data/thumbnails/`
+- **プロファイルバックアップ**: エクスポート機能で外部保存可能
+- すべてのデータはローカルに保存され、ポータブル
 
-## 🔧 Book Settings
+## 🔧 書籍設定
 
-Right-click any book and select "Settings" to customize:
-- **Title**: Custom display name
-- **Reading Direction**: Japanese (right-to-left) or Western (left-to-right) style
-- **Category**: Assign to custom categories
-- **Bookmark**: View current bookmark and reset if needed
-- **Thumbnail Page**: Choose which page to use as cover
+書籍を右クリックして「設定」を選択すると以下をカスタマイズできます：
+- **タイトル**: カスタム表示名
+- **読書方向**: 日本語（右から左）または欧米（左から右）スタイル
+- **カテゴリ**: カスタムカテゴリに割り当て
+- **ブックマーク**: 現在のブックマークを表示、必要に応じてリセット
+- **サムネイルページ**: カバーに使用するページを選択
 
-## 📱 System Requirements
+## 💾 プロファイル管理（重要）
+
+**⚠️ アップデート時のデータ保護**
+アプリケーションを更新する際は必ずプロファイル管理を使用してください：
+
+### アップデート前の手順
+1. PDF本棚を開く
+2. 右上の紫色📁ボタンをクリック
+3. 「EXPORT PROFILE」をクリック
+4. プロファイルファイルをアプリケーションフォルダ外の安全な場所に保存
+
+### アップデート後の手順
+1. 新しいPDF本棚バージョンを開く
+2. 右上の紫色📁ボタンをクリック
+3. 「IMPORT PROFILE」をクリック
+4. 保存したプロファイルファイルを選択
+5. すべてのデータが自動的に復元されます
+
+### 機能の違い
+- **EXPORT PROFILE**: 全データを外部ファイルに出力（アップデート用）
+- **CREATE BACKUP**: 内部フォルダにバックアップ作成（クイックバックアップ用）
+- **IMPORT PROFILE**: エクスポートしたプロファイルからデータ復元
+
+## 📱 システム要件
 
 - Windows 10/11
-- No additional software required (standalone executables)
+- 追加ソフトウェア不要（スタンドアロン実行ファイル）
 
-## 🎯 Tips & Tricks
+## 🎯 ヒント & テクニック
 
-1. **Organizing**: Create categories like "勉強", "料理", "ハワイ" for better organization
-2. **Custom Ordering**: Use drag & drop in custom sort mode for personal arrangement
-3. **Bookmarks**: Books with bookmarks show "📖 p.X" in yellow text
-4. **Quick Access**: Use search to quickly find books by title or category
-5. **Reading Comfort**: Toggle fullscreen (F11) for immersive reading experience
+1. **整理**: 「勉強」「料理」「ハワイ」などのカテゴリを作成して効率的に整理
+2. **カスタム並び替え**: カスタムソートモードでドラッグ&ドロップして個人的な配置を作成
+3. **ブックマーク**: ブックマークがある書籍は黄色で「📖 p.X」と表示
+4. **お気に入りページ**: お気に入りがある書籍は水色で「⭐ X favorites」と表示
+5. **クイックアクセス**: 検索機能でタイトルやカテゴリから素早く書籍を見つける
+6. **読書快適性**: フルスクリーン（F11）で没入型読書体験を楽しむ
+7. **お気に入り活用**: Fキーで重要なページを記録、Gキーで素早くアクセス
+8. **データ保護**: アップデート前は必ずプロファイルエクスポートを実行
 
-## 📋 File Structure
+## 📋 ファイル構造
 
 ```
-PDF_Bookshelf.exe    # Main application
-PDF_Reader.exe       # PDF reading application
+PDF_Bookshelf.exe    # メインアプリケーション
+PDF_Reader.exe       # PDF読書アプリケーション
 data/
-  ├── bookshelf.json # Book database
-  └── thumbnails/    # Generated book covers
+  ├── bookshelf.json # 書籍データベース
+  └── thumbnails/    # 生成された書籍カバー
 ```
 
-## 🎨 Features Overview
+## 🎨 機能概要
 
-- **Visual Library**: Beautiful thumbnail-based book organization
-- **Smart Bookmarks**: Automatic position saving with visual indicators
-- **Flexible Reading**: Support for various reading preferences
-- **Category Management**: Custom organization system
-- **Drag & Drop**: Intuitive book arrangement
-- **Portable**: All data contained in local folder
+- **視覚的ライブラリ**: 美しいサムネイルベースの書籍整理
+- **スマートブックマーク**: 自動位置保存と視覚的インジケーター
+- **お気に入りページ**: 重要なページの記録と管理
+- **柔軟な読書**: 様々な読書設定に対応
+- **カテゴリ管理**: カスタム整理システム
+- **ドラッグ&ドロップ**: 直感的な書籍配置
+- **データ保護**: プロファイル管理でアップデート時も安心
+- **ポータブル**: すべてのデータがローカルフォルダに格納
 
-Enjoy your digital reading experience! 📚✨
+デジタル読書体験をお楽しみください！ 📚✨
