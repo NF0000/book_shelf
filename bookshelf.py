@@ -657,7 +657,7 @@ class PDFBookshelf:
             reader_launched = False
             
             # Priority 1: Try PDF_Reader.exe first
-            reader_exe = os.path.join(base_path, "PDF_Reader.exe")
+            reader_exe = os.path.join(base_path, "fullscreen_reader.exe")
             if os.path.exists(reader_exe):
                 try:
                     subprocess.Popen([
