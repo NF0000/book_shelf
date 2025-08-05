@@ -39,9 +39,16 @@ class PDFBookshelf:
         self.dragging_book = None
         self.drag_data = {}
         
+        # Setup UI first for immediate visual feedback
         self.setup_ui()
-        self.load_bookshelf_data()
         self.bind_keys()
+        
+        # Show loading message
+        self.status_var.set("📚 Loading library...")
+        self.book_count_label.configure(text="Loading...")
+        
+        # Load data asynchronously after UI is shown
+        self.root.after(50, self.load_bookshelf_data_async)
     
     def setup_ui(self):
         # Title and toolbar
@@ -102,6 +109,21 @@ class PDFBookshelf:
             pady=8
         )
         self.add_button.pack(side=tk.LEFT)
+        
+        # Profile management button
+        self.profile_button = tk.Button(
+            button_frame,
+            text="📁",
+            command=self.show_profile_menu,
+            font=("Arial", 12),
+            bg='#9C27B0',
+            fg='white',
+            relief=tk.FLAT,
+            padx=8,
+            pady=8,
+            cursor='hand2'
+        )
+        self.profile_button.pack(side=tk.LEFT, padx=(10, 0))
         
         # Search and Sort bar
         control_frame = tk.Frame(title_frame, bg='#2e2e2e')
@@ -332,9 +354,10 @@ class PDFBookshelf:
                 'last_opened': None,
                 'last_page': 0,
                 'thumbnail_page': 0,
-                'reading_direction': 'right_to_left',  # 'right_to_left' or 'left_to_right'
+                'reading_direction': 'left_to_right',  # 'right_to_left' or 'left_to_right'
                 'category': 'Uncategorized',  # Default category
-                'custom_order': len(self.books)  # For custom sorting
+                'custom_order': len(self.books),  # For custom sorting
+                'favorite_pages': []  # お気に入りページリスト
             }
             
             self.books.append(book_data)
@@ -414,15 +437,24 @@ class PDFBookshelf:
         )
         title_label.pack(pady=(0, 5))
         
-        # Pages info with bookmark status
+        # Pages info with bookmark and favorites status
         last_page = book.get('last_page', 0)
-        # Debug: Check if bookmark exists
+        favorite_pages = book.get('favorite_pages', [])
+        
+        # Build status text
+        status_parts = [f"{book['pages']} pages"]
+        
         if last_page > 0:
-            pages_text = f"{book['pages']} pages • 📖 p.{last_page + 1}"
+            status_parts.append(f"📖 p.{last_page + 1}")
             info_color = '#FFD54F'  # Yellow for bookmarked books
         else:
-            pages_text = f"{book['pages']} pages"
             info_color = '#cccccc'
+        
+        if favorite_pages:
+            status_parts.append(f"⭐ {len(favorite_pages)}")
+            info_color = '#FFB74D'  # Orange for books with favorites
+        
+        pages_text = " • ".join(status_parts)
         
         info_label = tk.Label(
             book_frame,
@@ -604,36 +636,114 @@ class PDFBookshelf:
             messagebox.showerror("Error", f"File not found: {book['path']}")
             return
         
-        # Update last opened
-        book['last_opened'] = datetime.now().isoformat()
-        self.save_bookshelf_data()
+        # Show immediate feedback
+        self.status_var.set(f"📖 Opening {book['title'][:30]}...")
+        self.root.update()
         
         # Launch fullscreen reader with reading direction and bookmark
         try:
-            reading_direction = book.get('reading_direction', 'right_to_left')
+            reading_direction = book.get('reading_direction', 'left_to_right')
             start_page = book.get('last_page', 0)
             
-            # Check if we're running as an executable or Python script
+            # Determine base path for finding reader
             if getattr(sys, 'frozen', False):
-                # Running as .exe, use PDF_Reader.exe
-                reader_exe = os.path.join(os.path.dirname(sys.executable), "PDF_Reader.exe")
-                subprocess.Popen([
-                    reader_exe,
-                    book['path'], 
-                    reading_direction, 
-                    str(start_page)
-                ])
+                # Running as .exe
+                base_path = os.path.dirname(sys.executable)
             else:
                 # Running as Python script
-                subprocess.Popen([
-                    sys.executable, 
-                    "fullscreen_reader.py", 
-                    book['path'], 
-                    reading_direction, 
-                    str(start_page)
-                ])
+                base_path = os.path.dirname(os.path.abspath(__file__))
+            
+            # Try to launch reader with fallback mechanism
+            reader_launched = False
+            
+            # Priority 1: Try PDF_Reader.exe first
+            reader_exe = os.path.join(base_path, "PDF_Reader.exe")
+            if os.path.exists(reader_exe):
+                try:
+                    subprocess.Popen([
+                        reader_exe,
+                        book['path'], 
+                        reading_direction, 
+                        str(start_page)
+                    ])
+                    reader_launched = True
+                    self.status_var.set(f"📖 Opening {book['title'][:30]} (exe)...")
+                except Exception as exe_error:
+                    print(f"Failed to launch .exe: {exe_error}")
+            
+            # Priority 2: Fallback to fullscreen_reader.py if .exe failed or doesn't exist
+            if not reader_launched:
+                fullscreen_py = os.path.join(base_path, "fullscreen_reader.py")
+                if os.path.exists(fullscreen_py):
+                    try:
+                        subprocess.Popen([
+                            sys.executable, 
+                            fullscreen_py, 
+                            book['path'], 
+                            reading_direction, 
+                            str(start_page)
+                        ])
+                        reader_launched = True
+                        self.status_var.set(f"📖 Opening {book['title'][:30]} (py)...")
+                    except Exception as py_error:
+                        print(f"Failed to launch .py: {py_error}")
+            
+            # If both methods failed, show error
+            if not reader_launched:
+                raise Exception("Neither PDF_Reader.exe nor fullscreen_reader.py could be launched. Please ensure the reader files exist.")
+            
+            # Update last opened after successful launch (async)
+            self.root.after(100, lambda: self.update_book_opened(book))
+            
+            # Monitor for bookmark updates (check every 3 seconds)
+            self.root.after(3000, lambda: self.monitor_bookmark_updates(book))
+            
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open reader: {e}")
+            self.status_var.set("Ready")
+    
+    def update_book_opened(self, book):
+        """Update book's last opened timestamp asynchronously"""
+        book['last_opened'] = datetime.now().isoformat()
+        self.save_bookshelf_data()
+        self.status_var.set(f"✅ {book['title'][:30]} opened successfully")
+        # Return to normal status after 2 seconds
+        self.root.after(2000, lambda: self.status_var.set("Ready"))
+    
+    def monitor_bookmark_updates(self, book):
+        """Monitor for bookmark updates while reader is open"""
+        try:
+            # Reload bookshelf data to get latest bookmarks
+            if os.path.exists(self.bookshelf_file):
+                with open(self.bookshelf_file, 'r', encoding='utf-8') as f:
+                    updated_books = json.load(f)
+                
+                # Find the book and update its data
+                for updated_book in updated_books:
+                    if updated_book['id'] == book['id']:
+                        # Check if bookmark changed
+                        old_bookmark = book.get('last_page', 0)
+                        new_bookmark = updated_book.get('last_page', 0)
+                        
+                        if old_bookmark != new_bookmark:
+                            try:
+                                print(f"DEBUG: Bookmark updated for book ID {book['id']} - from page {old_bookmark} to page {new_bookmark}")
+                            except UnicodeEncodeError:
+                                print(f"DEBUG: Bookmark updated - from page {old_bookmark} to page {new_bookmark}")
+                            # Update local book data
+                            book.update(updated_book)
+                            # Refresh display to show new bookmark
+                            self.refresh_bookshelf()
+                        
+                        break
+                
+                # Continue monitoring (every 3 seconds)
+                self.root.after(3000, lambda: self.monitor_bookmark_updates(book))
+                
+        except Exception as e:
+            print(f"Error monitoring bookmark updates: {e}")
+            # Continue monitoring even if error occurs
+            self.root.after(3000, lambda: self.monitor_bookmark_updates(book))
     
     def show_context_menu(self, event, book):
         """Show context menu for book"""
@@ -676,15 +786,15 @@ class PDFBookshelf:
         
         # Reading direction setting
         tk.Label(general_frame, text="Reading Direction:", font=("Arial", 12), bg='#2e2e2e', fg='white').pack(anchor='w', pady=(0, 5))
-        direction_var = tk.StringVar(value=book.get('reading_direction', 'right_to_left'))
+        direction_var = tk.StringVar(value=book.get('reading_direction', 'left_to_right'))
         
         direction_frame = tk.Frame(general_frame, bg='#2e2e2e')
         direction_frame.pack(fill='x', pady=(0, 20))
         
-        tk.Radiobutton(direction_frame, text="Right to Left (Japanese style)", variable=direction_var, 
+        tk.Radiobutton(direction_frame, text="Right to Left ", variable=direction_var, 
                       value='right_to_left', bg='#2e2e2e', fg='white', selectcolor='#404040',
                       font=("Arial", 10)).pack(anchor='w')
-        tk.Radiobutton(direction_frame, text="Left to Right (Western style)", variable=direction_var, 
+        tk.Radiobutton(direction_frame, text="Left to Right ", variable=direction_var, 
                       value='left_to_right', bg='#2e2e2e', fg='white', selectcolor='#404040',
                       font=("Arial", 10)).pack(anchor='w')
         
@@ -743,10 +853,9 @@ class PDFBookshelf:
         preview_frame = tk.Frame(thumbnail_frame, bg='#404040', relief=tk.RAISED, bd=2)
         preview_frame.pack(pady=20)
         
-        # Create preview label
-        preview_label = tk.Label(preview_frame, text="Loading preview...", bg='#404040', fg='white', 
-                                width=20, height=10)
-        preview_label.pack(padx=10, pady=10)
+        # Create fixed-size preview area (200x280 pixels for proper display)
+        preview_canvas = tk.Canvas(preview_frame, width=200, height=280, bg='#404040', highlightthickness=0)
+        preview_canvas.pack(padx=10, pady=10)
         
         # Store references to prevent garbage collection
         preview_images = {}
@@ -757,37 +866,58 @@ class PDFBookshelf:
                 page_num = page_var.get() - 1  # Convert to 0-based
                 print(f"Updating preview for page {page_num + 1}")  # Debug
                 
+                preview_canvas.delete("all")  # Clear previous image
+                
                 if 0 <= page_num < book['pages']:
-                    # Generate preview thumbnail
+                    # Generate preview thumbnail with better resolution
                     doc = fitz.open(book['path'])
                     page = doc[page_num]
-                    mat = fitz.Matrix(0.5, 0.5)  # Scale for preview
+                    
+                    # Use higher resolution for better quality
+                    mat = fitz.Matrix(1.0, 1.0)  # Increased from 0.5 for better quality
                     pix = page.get_pixmap(matrix=mat)
                     
                     img_data = pix.tobytes("ppm")
                     pil_image = Image.open(io.BytesIO(img_data))
                     
-                    # Resize to fit preview area
-                    pil_image.thumbnail((150, 200), Image.Resampling.LANCZOS)
+                    # Calculate proper scaling to fit in preview area while maintaining aspect ratio
+                    img_width, img_height = pil_image.size
+                    canvas_width, canvas_height = 200, 280
+                    
+                    # Calculate scale to fit both dimensions
+                    scale_x = canvas_width / img_width
+                    scale_y = canvas_height / img_height
+                    scale = min(scale_x, scale_y)  # Use smaller scale to fit completely
+                    
+                    # Calculate new dimensions
+                    new_width = int(img_width * scale)
+                    new_height = int(img_height * scale)
+                    
+                    # Resize image properly (don't use thumbnail as it modifies original)
+                    resized_image = pil_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
                     
                     # Create PhotoImage
-                    photo = ImageTk.PhotoImage(pil_image)
+                    photo = ImageTk.PhotoImage(resized_image)
                     
                     # Store reference to prevent garbage collection
                     preview_images[page_num] = photo
                     
-                    # Update label
-                    preview_label.configure(image=photo, text="")
-                    preview_label.image = photo
+                    # Center image on canvas
+                    x = (canvas_width - new_width) // 2
+                    y = (canvas_height - new_height) // 2
+                    
+                    # Display image on canvas
+                    preview_canvas.create_image(x, y, anchor=tk.NW, image=photo)
                     
                     doc.close()
-                    print(f"Preview updated successfully for page {page_num + 1}")  # Debug
+                    print(f"Preview updated successfully for page {page_num + 1} - Size: {new_width}x{new_height}")  # Debug
                 else:
-                    preview_label.configure(text="Invalid page", image="")
+                    # Show error message
+                    preview_canvas.create_text(100, 140, text="Invalid page", fill="white", font=("Arial", 12))
                     print(f"Invalid page number: {page_num + 1}")  # Debug
                     
             except Exception as e:
-                preview_label.configure(text=f"Error loading preview", image="")
+                preview_canvas.create_text(100, 140, text="Error loading\npreview", fill="red", font=("Arial", 12), justify=tk.CENTER)
                 print(f"Error updating preview: {e}")  # Debug
         
         # Update preview when page changes
@@ -855,7 +985,7 @@ class PDFBookshelf:
 Filename: {book['filename']}
 Path: {book['path']}
 Pages: {book['pages']}
-Reading Direction: {book.get('reading_direction', 'right_to_left').replace('_', ' ').title()}
+Reading Direction: {book.get('reading_direction', 'left_to_right').replace('_', ' ').title()}
 Thumbnail Page: {book.get('thumbnail_page', 0) + 1}
 Current Bookmark: {bookmark_info}
 Added: {book['added_date'][:19].replace('T', ' ')}
@@ -999,6 +1129,349 @@ Last Opened: {book['last_opened'][:19].replace('T', ' ') if book['last_opened'] 
         
         new_cat_entry.focus()
     
+    def show_profile_menu(self):
+        """Show profile management popup menu"""
+        popup = tk.Toplevel(self.root)
+        popup.title("📁 Profile Management")
+        popup.geometry("450x400")
+        popup.configure(bg='#2e2e2e')
+        popup.resizable(False, False)
+        
+        # Make it modal
+        popup.transient(self.root)
+        popup.grab_set()
+        
+        # Center the popup
+        x = self.root.winfo_x() + self.root.winfo_width() // 2 - 225
+        y = self.root.winfo_y() + self.root.winfo_height() // 2 - 200
+        popup.geometry(f"450x400+{x}+{y}")
+        
+        # Title
+        title_label = tk.Label(popup, text="📁 Profile Management", 
+                              font=("Arial", 16, "bold"),
+                              bg='#2e2e2e', fg='white')
+        title_label.pack(pady=(20, 10))
+        
+        # Statistics display
+        stats_frame = tk.Frame(popup, bg='#404040', relief=tk.RAISED, bd=1)
+        stats_frame.pack(fill=tk.X, padx=20, pady=10)
+        
+        total_books = len(self.books)
+        total_favorites = sum(len(book.get('favorite_pages', [])) for book in self.books)
+        total_categories = len(self.categories) - 1  # Exclude 'All'
+        
+        stats_text = f"""📊 Current Profile Statistics:
+        
+📚 Books: {total_books}
+⭐ Favorites: {total_favorites}  
+📁 Categories: {total_categories}
+💾 Data Size: {self.get_data_size()}"""
+        
+        stats_label = tk.Label(stats_frame, text=stats_text,
+                              font=("Arial", 10), bg='#404040', fg='white',
+                              justify=tk.LEFT)
+        stats_label.pack(padx=15, pady=15)
+        
+        # Button frame
+        button_frame = tk.Frame(popup, bg='#2e2e2e')
+        button_frame.pack(fill=tk.X, padx=20, pady=20)
+        
+        # Export button
+        export_btn = tk.Button(button_frame, text="📤 Export Profile",
+                              command=lambda: [self.export_profile(), popup.destroy()],
+                              bg='#4CAF50', fg='white',
+                              font=("Arial", 12, "bold"), padx=20, pady=10)
+        export_btn.pack(fill=tk.X, pady=3)
+        
+        # Import button  
+        import_btn = tk.Button(button_frame, text="📥 Import Profile",
+                              command=lambda: [self.import_profile(), popup.destroy()],
+                              bg='#2196F3', fg='white',
+                              font=("Arial", 12, "bold"), padx=20, pady=10)
+        import_btn.pack(fill=tk.X, pady=3)
+        
+        # Auto backup button
+        backup_btn = tk.Button(button_frame, text="🔄 Create Backup Now",
+                              command=lambda: [self.create_backup(), popup.destroy()],
+                              bg='#FF9800', fg='white',
+                              font=("Arial", 12, "bold"), padx=20, pady=10)
+        backup_btn.pack(fill=tk.X, pady=3)
+        
+        # Close button
+        close_btn = tk.Button(button_frame, text="Close",
+                             command=popup.destroy,
+                             bg='#666666', fg='white',
+                             font=("Arial", 11), padx=20, pady=8)
+        close_btn.pack(fill=tk.X, pady=(15, 2))
+        
+        # Bind Escape to close
+        popup.bind('<Escape>', lambda e: popup.destroy())
+        popup.focus_set()
+    
+    def get_data_size(self):
+        """Get approximate data size"""
+        try:
+            if os.path.exists(self.bookshelf_file):
+                size_bytes = os.path.getsize(self.bookshelf_file)
+                if size_bytes < 1024:
+                    return f"{size_bytes} B"
+                elif size_bytes < 1024 * 1024:
+                    return f"{size_bytes / 1024:.1f} KB"
+                else:
+                    return f"{size_bytes / (1024 * 1024):.1f} MB"
+            return "0 B"
+        except:
+            return "Unknown"
+    
+    def export_profile(self):
+        """Export complete profile to file"""
+        try:
+            from tkinter import filedialog
+            import base64
+            from datetime import datetime
+            
+            # Get export file path
+            file_path = filedialog.asksaveasfilename(
+                title="Export Profile As...",
+                defaultextension=".pdflib",
+                filetypes=[
+                    ("PDF Library Profile", "*.pdflib"),
+                    ("JSON files", "*.json"),
+                    ("All files", "*.*")
+                ]
+            )
+            
+            if not file_path:
+                return
+            
+            self.status_var.set("📤 Exporting profile...")
+            self.root.update()
+            
+            # Prepare export data
+            export_data = {
+                "profile_version": "1.0",
+                "export_date": datetime.now().isoformat(),
+                "app_version": "1.0",
+                "data": {
+                    "books": self.books,
+                    "categories": list(self.categories),
+                    "thumbnails": {},
+                    "settings": {
+                        "sort_mode": self.sort_mode,
+                        "current_category": self.current_category
+                    }
+                },
+                "statistics": {
+                    "total_books": len(self.books),
+                    "total_favorites": sum(len(book.get('favorite_pages', [])) for book in self.books),
+                    "export_timestamp": datetime.now().isoformat()
+                }
+            }
+            
+            # Include thumbnails as base64
+            for book in self.books:
+                thumbnail_path = os.path.join(self.thumbnails_dir, f"{book['id']}.png")
+                if os.path.exists(thumbnail_path):
+                    try:
+                        with open(thumbnail_path, 'rb') as img_file:
+                            img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                            export_data["data"]["thumbnails"][book['id']] = img_data
+                    except Exception as e:
+                        print(f"Error encoding thumbnail for {book['id']}: {e}")
+            
+            # Save export file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            
+            # Show success message
+            total_books = export_data["statistics"]["total_books"]
+            total_favorites = export_data["statistics"]["total_favorites"]
+            
+            messagebox.showinfo("Export Complete", 
+                              f"Profile exported successfully!\n\n"
+                              f"📚 {total_books} books\n"
+                              f"⭐ {total_favorites} favorites\n"
+                              f"📁 {len(export_data['data']['thumbnails'])} thumbnails\n\n"
+                              f"Saved to: {os.path.basename(file_path)}")
+            
+            self.status_var.set(f"✅ Profile exported to {os.path.basename(file_path)}")
+            
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export profile:\n\n{str(e)}")
+            self.status_var.set("❌ Export failed")
+    
+    def import_profile(self):
+        """Import profile from file"""
+        try:
+            from tkinter import filedialog
+            import base64
+            
+            # Get import file path
+            file_path = filedialog.askopenfilename(
+                title="Import Profile From...",
+                filetypes=[
+                    ("PDF Library Profile", "*.pdflib"),
+                    ("JSON files", "*.json"),
+                    ("All files", "*.*")
+                ]
+            )
+            
+            if not file_path:
+                return
+            
+            # Confirm import
+            if not messagebox.askyesno("Confirm Import", 
+                                     "This will replace all current data including:\n\n"
+                                     "• All books and bookmarks\n"
+                                     "• All favorite pages\n" 
+                                     "• All categories\n"
+                                     "• All settings\n\n"
+                                     "Continue?"):
+                return
+            
+            self.status_var.set("📥 Importing profile...")
+            self.root.update()
+            
+            # Load import data
+            with open(file_path, 'r', encoding='utf-8') as f:
+                import_data = json.load(f)
+            
+            # Validate import data
+            if "profile_version" not in import_data:
+                raise Exception("Invalid profile file format")
+            
+            # Import books data
+            self.books = import_data["data"]["books"]
+            
+            # Import categories
+            self.categories = set(import_data["data"]["categories"])
+            
+            # Import settings
+            settings = import_data["data"].get("settings", {})
+            self.sort_mode = settings.get("sort_mode", "recent")
+            self.current_category = settings.get("current_category", "All")
+            
+            # Import thumbnails
+            thumbnails = import_data["data"].get("thumbnails", {})
+            os.makedirs(self.thumbnails_dir, exist_ok=True)
+            
+            imported_thumbnails = 0
+            for book_id, img_data in thumbnails.items():
+                try:
+                    thumbnail_path = os.path.join(self.thumbnails_dir, f"{book_id}.png")
+                    with open(thumbnail_path, 'wb') as img_file:
+                        img_file.write(base64.b64decode(img_data))
+                    imported_thumbnails += 1
+                except Exception as e:
+                    print(f"Error importing thumbnail for {book_id}: {e}")
+            
+            # Save imported data
+            self.save_bookshelf_data()
+            
+            # Update UI
+            self.update_category_dropdown()
+            self.refresh_bookshelf()
+            
+            # Show success message
+            stats = import_data.get("statistics", {})
+            total_books = stats.get("total_books", len(self.books))
+            total_favorites = stats.get("total_favorites", 0)
+            
+            messagebox.showinfo("Import Complete",
+                              f"Profile imported successfully!\n\n"
+                              f"📚 {total_books} books\n"
+                              f"⭐ {total_favorites} favorites\n"
+                              f"🖼️ {imported_thumbnails} thumbnails\n"
+                              f"📁 {len(self.categories)-1} categories")
+            
+            self.status_var.set(f"✅ Profile imported from {os.path.basename(file_path)}")
+            
+        except Exception as e:
+            messagebox.showerror("Import Error", f"Failed to import profile:\n\n{str(e)}")
+            self.status_var.set("❌ Import failed")
+    
+    def create_backup(self):
+        """Create automatic backup"""
+        try:
+            from datetime import datetime
+            
+            # Create backups directory
+            backups_dir = os.path.join(self.data_dir, "backups")
+            os.makedirs(backups_dir, exist_ok=True)
+            
+            # Generate backup filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_filename = f"backup_{timestamp}.pdflib"
+            backup_path = os.path.join(backups_dir, backup_filename)
+            
+            self.status_var.set("🔄 Creating backup...")
+            self.root.update()
+            
+            # Create backup using export functionality
+            import base64
+            
+            backup_data = {
+                "profile_version": "1.0",
+                "export_date": datetime.now().isoformat(),
+                "app_version": "1.0",
+                "backup_type": "automatic",
+                "data": {
+                    "books": self.books,
+                    "categories": list(self.categories),
+                    "thumbnails": {},
+                    "settings": {
+                        "sort_mode": self.sort_mode,
+                        "current_category": self.current_category
+                    }
+                }
+            }
+            
+            # Include thumbnails
+            for book in self.books:
+                thumbnail_path = os.path.join(self.thumbnails_dir, f"{book['id']}.png")
+                if os.path.exists(thumbnail_path):
+                    try:
+                        with open(thumbnail_path, 'rb') as img_file:
+                            img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                            backup_data["data"]["thumbnails"][book['id']] = img_data
+                    except:
+                        pass
+            
+            # Save backup
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=2, ensure_ascii=False)
+            
+            # Clean old backups (keep last 5)
+            self.cleanup_old_backups(backups_dir)
+            
+            messagebox.showinfo("Backup Complete",
+                              f"Backup created successfully!\n\n"
+                              f"📁 {backup_filename}\n"
+                              f"📚 {len(self.books)} books backed up\n"
+                              f"💾 Saved in: backups/")
+            
+            self.status_var.set(f"✅ Backup created: {backup_filename}")
+            
+        except Exception as e:
+            messagebox.showerror("Backup Error", f"Failed to create backup:\n\n{str(e)}")
+            self.status_var.set("❌ Backup failed")
+    
+    def cleanup_old_backups(self, backups_dir):
+        """Keep only the 5 most recent backups"""
+        try:
+            backup_files = [f for f in os.listdir(backups_dir) if f.startswith("backup_") and f.endswith(".pdflib")]
+            backup_files.sort(reverse=True)  # Most recent first
+            
+            # Remove old backups (keep 5 most recent)
+            for old_backup in backup_files[5:]:
+                try:
+                    os.remove(os.path.join(backups_dir, old_backup))
+                    print(f"Removed old backup: {old_backup}")
+                except:
+                    pass
+        except Exception as e:
+            print(f"Error cleaning old backups: {e}")
+    
     def update_category_dropdown(self):
         """Update category dropdown values"""
         categories_list = ['All'] + sorted([cat for cat in self.categories if cat != 'All'])
@@ -1096,8 +1569,52 @@ Last Opened: {book['last_opened'][:19].replace('T', ' ') if book['last_opened'] 
         self.root.update_idletasks()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
     
+    def load_bookshelf_data_async(self):
+        """Load bookshelf data asynchronously after UI is shown"""
+        self.status_var.set("📂 Reading library data...")
+        self.root.update()
+        
+        # Load data in the background
+        try:
+            if os.path.exists(self.bookshelf_file):
+                with open(self.bookshelf_file, 'r', encoding='utf-8') as f:
+                    self.books = json.load(f)
+        except Exception as e:
+            print(f"Error loading bookshelf data: {e}")
+            self.books = []
+        
+        # Update categories from loaded books and ensure defaults
+        for book in self.books:
+            if 'category' not in book:
+                book['category'] = 'Uncategorized'
+            self.categories.add(book['category'])
+        
+        # Update UI elements
+        self.status_var.set("🎨 Updating interface...")
+        self.root.update()
+        
+        self.update_category_dropdown()
+        
+        # Show books progressively
+        self.status_var.set("📖 Loading books...")
+        self.root.update()
+        
+        # Use after() to allow UI updates between operations
+        self.root.after(10, self.refresh_bookshelf_complete)
+    
+    def refresh_bookshelf_complete(self):
+        """Complete the bookshelf refresh and show final status"""
+        self.refresh_bookshelf()
+        
+        # Show completion message briefly, then return to normal
+        total_books = len(self.books)
+        self.status_var.set(f"✅ Library loaded - {total_books} books")
+        
+        # Return to normal status after 2 seconds
+        self.root.after(2000, lambda: self.status_var.set("Ready"))
+
     def load_bookshelf_data(self):
-        """Load bookshelf data from JSON file"""
+        """Load bookshelf data from JSON file (synchronous version for compatibility)"""
         try:
             if os.path.exists(self.bookshelf_file):
                 with open(self.bookshelf_file, 'r', encoding='utf-8') as f:
